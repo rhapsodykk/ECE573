@@ -67,7 +67,8 @@ ISR(TIMER0_OVF_vect){                                   //TIMER0_OVF //_vect)
   count_7ms++;                //increment count every 7.8125 ms 
   if ((count_7ms % 64)==0){ //?? interrupts equals one half second        
     SPDR = display_count;     //send to display  
-    while (bit_is_clear(SPSR, SPIF))   //wait till data is sent out (while spin loop)    while (bit_is_clear(SPSR, SPIF))
+    while (bit_is_clear(SPSR, SPIF))  {
+     } //wait till data is sent out (while spin loop)    while (bit_is_clear(SPSR, SPIF))
     PORTB |=  (1 << PORTB0);         //strobe output data reg in HC595 - rising edge   0x02
     PORTB &=  (0 << PORTB0);          //falling edge                                                  0x00
     display_count = (display_count << 1 ) ; //shift display bit for next time        
