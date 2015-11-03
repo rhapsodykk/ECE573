@@ -1,8 +1,6 @@
-// lab2.c 
+// lab3.c 
 // Sihe Yang
-// 10.11.2015
-
-
+// 11.1.2015
 
 // 7_segment board       Mega128 board
 // --------------        ----------------------   
@@ -23,7 +21,6 @@
 //       VDD                   VDD
 
 
-
 // 8_push_Button board   7_segment board         
 // -------------------   ------------------ 
 //      A_2                     J8  
@@ -35,7 +32,6 @@
 //      G_2                     J4
 //      DP_2                    J5
 //     COM_EN                  DEC7
-
 
 
 // 8_push_Button board   Mega128 board         
@@ -80,12 +76,14 @@
 #include <avr/interrupt.h>
 
 uint8_t a[4] = {0};   // reset arrary a, hold data about which digit display
-uint8_t SEG[9] = {0};   //reset array SEE, hold data about decimal to 7-sgement LED
-uint8_t display_count = 0x01; //holds count for display on bar graph. After reseting, it shows 1
-int8_t count;   // the initial value for incrementing or decrementing sum
+uint8_t SEG[10] = {0xFF};   //reset array SEE, hold data about decimal to 7-sgement LED
+uint8_t display_count = 0x00; //holds count for display on bar graph. After reseting, it shows 1
+int8_t count = 1;   // the initial value for incrementing or decrementing sum
 int8_t count_sign;   // the sign of counting number, its value is 1 or -1.
-uint8_t update_encoder_data;  //It is for duplicating the value of encoder_data received by ISP
+uint8_t past_encoder_state;  //It is for duplicating the value of encoder_data received by ISP
 uint8_t coefficient = 1;   // For increment/ decrement 2 or 4, is changed by pushing button.
+uint8_t encoder_state = 3; //state of encoder, it initial state is 3(0xFF & 0x03).
+
 
 //*********************************************************************************
 //                            chk_buttons                                      
@@ -97,7 +95,6 @@ uint8_t coefficient = 1;   // For increment/ decrement 2 or 4, is changed by pus
 // external loop delay times 3. 
 //*********************************************************************************
 int16_t chk_buttons(uint8_t i) {  //check which button is pushed
-
 static uint16_t state[8] = {0x0000}; //holds present state
 	//the way of debounce S2-8 is not useful to S1, use another way
 	if (!(PINA&0x01)){   
@@ -121,9 +118,7 @@ static uint16_t state[8] = {0x0000}; //holds present state
 // This function takes a 16-bit binary input value and judges the appropriate value   
 // of 7-segment for1 digitBCD segment code in the array segment_data for display.                      
 //**********************************************************************************
-                               
 uint8_t segment_value() {    
-
 int k;
 	//choose the 7-segmaent LEDs to display based on its value of the corresponding array
 	for (k = 0; k < 5; k++) {
@@ -138,6 +133,7 @@ int k;
  	 		case 7: SEG[k] = 0xF8; break;  //display 7
 			case 8: SEG[k] = 0x80; break;  //display 8
 			case 9: SEG[k] = 0x90; break;  //display 9
+			case 10: SEG[k] = 0xFF; break;  //display null
   			default: SEG[k] = 0xFF;
   		}//switch
 	}//for    
@@ -150,9 +146,7 @@ int k;
 // BCD segment code in the array segment_data for display.                       
 // array is loaded at exit as:  |digit3|digit2|colon|digit1|digit0|
 //**********************************************************************************
-
 void  segment_sum() {   //display 4 digits of final sum
-
 int n;
 	for (n = 0; n < 5; n++) {
     		switch (n) {
@@ -174,8 +168,6 @@ int n;
 // interrupts disabled, poll SPIF bit in SPSR to check xmit completion
 /***********************************************************************/
 void spi_init(void){
-//  	DDRB  |=   0x07;                //Turn on MISO as input, and turn on SS, MOSI, SCLK as output, 
-//	DDRE  |=   0xC0;        	// Turn on CLK_INH, SH/LD as output  11000000
   	SPCR  |=   (1<<SPE)|(1<<MSTR);  //set up SPI mode      
   	SPSR  |=   (1<<SPI2X);          // double speed operation   
  }//spi_init
@@ -190,51 +182,94 @@ void spi_init(void){
 void tcnt0_init(void){
   ASSR   |=  (1<<AS0);  //ext osc TOSC                        
   TIMSK  |=  (1<<TOIE0);  //enable timer/counter0 overflow interrupt  
-  TCCR0  |=  (1<<CS00);  //normal mode, clk/128 from prescaler   
+  TCCR0  |=  (1<<CS00);  //normal mode, no prescalering   
 }
 
 
 /***********************************************************************/
 //                              encoders                             
 // Switching two encoders will increment or decrement the sum. To judge  
-// the data sent from 74HC165 can decide which encoder is switched. The  
-// left one increments the count, the right one decrements the count. If  
-// the user does not push any button, this count is changed by one.
+// the data sent from 74HC165 can decide which encoder is switched. Turn-  
+// ing counterclockwise of any encoder will increments the count, Otherwise 
+// it will be decremented. If the user does not push any button, this count 
+// changed by one.
 /***********************************************************************/
-uint8_t encoders(uint8_t encoder_data){
-	uint8_t encoder_right[3]= {0xFB, 0xF3, 0xF7, 0xFF}; //the value of SPI from 74HC165 output when right encoder is changed
-	uint8_t encoder_left[3]= {0xFE, 0xFC, 0xFD, 0xFF};  //the value of SPI from 74HC165 output when right encoder is changed
-	uint8_t mode;
-	
-	//*******************
+uint8_t encoders(uint8_t SPI_output){
+	//the value of SPI sent from 74HC165 output when right encoder is changed
+	uint8_t encoder_right[3]= {0xFB, 0xF3, 0xF7, 0xFF}; 
+	//the value of SPI sent from 74HC165 output when left encoder is changed
+	uint8_t encoder_left[3]= {0xFE, 0xFC, 0xFD, 0xFF}; 
+
 	PORTE = 0x00; 					// SH/LD = 0 CLK_INH = 0 
   	PORTE |= 0x80; 					// SH/LD = 1 CLK_INH = 0
 
 	uint8_t j;
 	for (j = 0; j < 3; j++) {
-		if (encoder_data == encoder_left[j]) {mode = 0;}  //left mode
-		else if (encoder_data == encoder_right[j]) {mode = 1;}  //right mode	
+		if (SPI_output == encoder_left[j]) //left mode
+			SPI_output &= 0x03;                       
+		else if (SPI_output == encoder_right[j]) //right mode
+			SPI_output = (SPI_output >> 2) & 0x03;  	
 	}
 
-	switch (mode){
-		case 0: 
-			if ((encoder_data - update_encoder_data) == -2) {   //switch over a value of encoder, change the data from 0xFD yo 0xFF
-				display_count &= 0x0F;       
-				display_count |= 0x20;   // high bytes stand for incrementing sum
-				count = 1; 
-				count_sign = 1;
-			}
+	switch (encoder_state){
+		case 2: 
+			if (past_encoder_state == 3) {  
+				count = 1;
+				count_sign = 1; 
+			}//trun clockwise, the sum is incremented
+			if (past_encoder_state == 0) {  
+				count = 1;
+				count_sign = -1; 
+			}//trun counterclockwise, the sum is incremented
+			past_encoder_state = encoder_state;
+			if (SPI_output == 0) encoder_state = 0;
+			if (SPI_output == 1) encoder_state = 1;
+			if (SPI_output == 0xFF) encoder_state = 3;
+			break;
+		case 0:
+			if (past_encoder_state == 2) {  
+				count = 1;
+				count_sign = 1; 
+			}//CW
+			if (past_encoder_state == 1) {  
+				count = 1;
+				count_sign = -1; 
+			}//CCW
+			past_encoder_state = encoder_state;
+			if (SPI_output == 1) encoder_state = 1;
+			if (SPI_output == 2) encoder_state = 2;
+			if (SPI_output == 0xFF) encoder_state = 3;
 			break;
 		case 1:
-			if ((encoder_data - update_encoder_data) == -8) {  //switch over a value of encoder, change the data from 0xF7 yo 0xFF
-				display_count &= 0x0F;       
-				display_count |= 0x80;   // high bytes stand for decrementing sum
+			if (past_encoder_state == 0) {  
 				count = 1;
-				count_sign = -1;
-			}
+				count_sign = 1; 
+			}//CW
+			if (past_encoder_state == 3) {  
+				count = 1;
+				count_sign = -1; 
+			}//CCW
+			past_encoder_state = encoder_state;
+			if (SPI_output == 0) encoder_state = 0;
+			if (SPI_output == 2) encoder_state = 2;
+			if (SPI_output == 0xFF) encoder_state = 3; 
 			break;
-	}
-	update_encoder_data = encoder_data;    //duplicating the value of encoder_data if encoder_data changes
+		case 3: 
+			if (past_encoder_state == 1) {  
+				count = 1;
+				count_sign = 1; 
+			}//CW
+			if (past_encoder_state == 2) {  
+				count = 1;
+				count_sign = -1; 
+			}//CCW
+			past_encoder_state = encoder_state; 
+			count = 0; 
+			if (SPI_output == 0) encoder_state = 0;
+			if (SPI_output == 1) encoder_state = 1;
+			if (SPI_output == 2) encoder_state = 2;
+			break;	
+	}//switch		  
 }
 
 
@@ -243,16 +278,13 @@ uint8_t encoders(uint8_t encoder_data){
 // This TIMER0 vector will be run when the interrupt happens, it excuates
 // the encoders function and send the data of bar graph out by using SPI
 //***********************************************************************/
-ISR(TIMER0_OVF_vect){                                  
-	
+ISR(TIMER0_OVF_vect){                                  	
 	encoders(SPDR);
 	SPDR = display_count; //send to display
 	
 	while (bit_is_clear(SPSR, SPIF)) {}   //wait till data is sent out (while spin loop)    
  	PORTB |=   (1 << PORTB0);         //strobe output data reg in HC595 - rising edge   0x02
     	PORTB &=  ~(1 << PORTB0);          //falling edge   
-      
-		
 }
 
 
@@ -262,13 +294,17 @@ ISR(TIMER0_OVF_vect){
 // decrement 2, linghting D1 and D2 on bar graph; Pushing S6 means to increment or 
 // decrement 4, linghting D1-4
 //***********************************************************************************
-int main()
+int main() {
 
-{
 int16_t sum = 0;   //the value of sum
 int8_t rawkeypressed = 0;
-DDRB = 0xF7;       //set PB[7:4] as output for 74HC138 decoder; set PB[3:0] to turn on MISO as input, and turn on SS, MOSI, SCLK as output, 
-DDRE |=   0xC0;     // Turn on CLK_INH, SH/LD as output  11000000
+uint8_t button;
+uint8_t past_state = 0;
+uint8_t mode;  // 1 -- in mode 1; 2 -- in mode 2; 4 -- in mode 4
+//set PB[7:4] as output for 74HC138 decoder; 
+//set PB[3:0] to turn on MISO as input, and turn on SS, MOSI, SCLK as output
+DDRB = 0xF7;       
+DDRE |= 0xC0;     // Turn on CLK_INH, SH/LD as output  11000000
 DDRA = 0x00;     //set port A all input for 7-segment
 
 tcnt0_init();  //initalize counter timer zero
@@ -276,46 +312,80 @@ spi_init();    //initalize SPI port
 sei();         //enable interrupts before entering loop
 
 while(1){
-
         _delay_ms(3);    //delay 3 ms
         PORTA = 0xFF;    //set port A to be with pullups
 	PORTB = 0x70;    //set the decoder
 
 	uint8_t i;
 	//use i to check out which button is pushed  
-	for (i = 0; i < 8; i++){
+	for (i = 6; i < 8; i++){
 		//push the button
-		if (chk_buttons(i)) { 
-			//release the button, specially for S1
-			if (rawkeypressed == 1){   
-				rawkeypressed = 0;  //reset button
-				switch (i){ 
-					case 1:   
-				  		coefficient = 2;         // S1 button is pushed
-						display_count &= 0xF0;       
-						display_count |= 0x03;   // low bytes stand for counting 2
-						break;
-					case 6: 
-						coefficient = 4;         // S6 button is pushed 
-						display_count &= 0xF0;       
-						display_count |= 0x0F;   // low bytes stand for counting 4	
-						break;
-					default: count = count;
-				}//switch
+		if (chk_buttons(i)) { //if push button S6 or S7
+			button = i;
+			if (button == 6) {  //push S6
+				if (past_state == 6) mode = 1;  //push S6 twice
+				else if (past_state == 7) {
+					if (mode == 0) mode = 2;
+					else mode = 0; //push S6 and then push S7
+				}
+				else {                      // only push S6 one time
+					mode = 2;
+					past_state = button;			
+				}
 			}//if
+			else if (button == 7) { //push S7
+				if (past_state == 7) mode = 1;  //push S7 twice
+				else if (past_state == 6) mode = 0; //push S7 and then push S6
+				else {                      // only push S7 one time
+					mode = 4;
+					past_state = button;			
+				}
+			}//if
+			else {  // come back to mode 1
+				mode = 1;
+			}
 		}//if
-		else rawkeypressed = 1;
 	}//for
+
+	switch (mode) {
+		case 0: coefficient = 0; break;
+		case 1: coefficient = 1; past_state = 0; display_count &= 0x00; break;
+		                                           // low bytes stand for counting 1
+		case 2: coefficient = 2; display_count &= 0x00; display_count |= 0x03; break;   
+		                                           // low bytes stand for counting 4
+		case 4: coefficient = 4; display_count &= 0x00; display_count |= 0x0F; break;   
+	}
+
 	//only showing 0-1023, sum is effected by count, sign and x2/x4
 	if ((sum < 1024) && (sum >= 0)) {sum += count * count_sign * coefficient;}   
 	//if the sum is larger than the max value 1024, subtract 1023 and show the remaining
 	else if (sum >= 1024){sum -= 1023;}          		
 	else if (sum < 0) {sum += 1024;}
 
-	a[0] = sum%10; //get the number of units 
-	a[1] = sum/10%10; //get the number of tens
-	a[3] = sum/100%10;  //get the number of hundreds
-	a[4] = sum/1000; //get the number of thousands	
+	if (sum < 10) {
+		a[0] = sum%10; //get the number of units
+		a[1] = 10; 
+		a[3] = 10;
+		a[4] = 10;
+	}
+	else if (sum < 100) {
+		a[0] = sum%10; //get the number of units 
+		a[1] = sum/10%10; //get the number of tens
+		a[3] = 10;
+		a[4] = 10;	
+	}
+	else if (sum <1000) {
+		a[0] = sum%10; //get the number of units
+		a[1] = sum/10%10; //get the number of tens
+		a[3] = sum/100%10;  //get the number of hundreds
+		a[4] = 10;
+	}
+	else {
+		a[0] = sum%10; //get the number of units 
+		a[1] = sum/10%10; //get the number of tens
+		a[3] = sum/100%10;  //get the number of hundreds
+		a[4] = sum/1000; //get the number of thousands	
+	}
 	//send sum to display 7-segement
 	segment_value(a); 
 	//reset counter
@@ -330,6 +400,5 @@ while(1){
 	rawkeypressed = 0; 
 	//send value of 4 digit segments to display 
 	segment_sum(SEG); 
-
 }//while
 }//main
