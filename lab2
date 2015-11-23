@@ -6,7 +6,7 @@
 //  PORTA.0 corresponds to segment a, PORTA.1 corresponds to segement b, etc.
 //  PORTB bits 4-6 go to a,b,c inputs of the 74HC138.
 //  PORTB bit 7 goes to the PWM transistor base.
-
+//Push button to add count, button S1 to S8 mean to increment 1/2/4/8/16/32/64/128
 // 7_segment board       Mega128 board
 // --------------        ----------------------   ------------------
 //       A               PORTA bit 0 (AD0)
