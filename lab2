@@ -7,6 +7,48 @@
 //  PORTB bits 4-6 go to a,b,c inputs of the 74HC138.
 //  PORTB bit 7 goes to the PWM transistor base.
 
+// 7_segment board       Mega128 board
+// --------------        ----------------------   ------------------
+//       A               PORTA bit 0 (AD0)
+//       B               PORTA bit 1 (AD1)
+//       C               PORTA bit 2 (AD2)
+//       D               PORTA bit 3 (AD3)
+//       E               PORTA bit 4 (AD4)
+//       F               PORTA bit 5 (AD5)
+//       G               PORTA bit 6 (AD6)
+//       DP              PORTA bit 7 (AD7)
+//      SEL0             PORTB bit 4 (AD8)
+//      SEL1             PORTB bit 5 (OC1A)
+//      SEL2             PORTB bit 6 (OC2/OC1C)
+//      EN_N                   GND
+//       EN                    VDD
+//       GND                   GND
+//       VDD                   VDD
+
+
+
+// 8_push_Button board   7_segment board         
+// -------------------   ------------------ 
+//      A_2                     J8  
+//      B_2                     J6
+//      C_2                     J7
+//      D_2                     J1
+//      E_2                     J2
+//      F_2                     J3
+//      G_2                     J4
+//      DP_2                    J5
+//     COM_EN                  DEC7
+
+
+
+// 8_push_Button board   Mega128 board         
+// -------------------   ------------------ 
+//      COM_LVL                GND                
+//       GND                   GND
+//       VDD                   VDD
+     
+     
+     
 #define F_CPU 16000000 // cpu speed in hertz 
 #define TRUE 1
 #define FALSE 0
@@ -112,7 +154,7 @@ uint16_t sum = 0;   //the value of sum
 int8_t rawkeypressed = 0;
 
 while(1){
-        _delay_ms(3);    //delay 3 ms
+        //_delay_ms(3);    //4 digital display can light equally if don't use delay 3 ms
         DDRA = 0x00;     //set port A all input for 7-segment
         PORTA = 0xFF;    //set port A to be with pullups
 	PORTB = 0x70;    //set the decoder
