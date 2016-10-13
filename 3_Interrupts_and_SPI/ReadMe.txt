@@ -1,4 +1,4 @@
-ECE473 Lab3:
+ECE573 Lab3:
 
 Purpose:
   *Try another way to use push buttons as a user interface.
