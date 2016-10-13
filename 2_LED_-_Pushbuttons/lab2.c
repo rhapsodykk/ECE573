@@ -143,8 +143,11 @@ int n;
 
 
 //***********************************************************************************
-// main function for execuating the counter based on the different values of S1 - S8
-
+//                                   Main
+// The main function is for adding different vaules to the sum displayed on the 
+// 7-segemnt board based on pushing button 1-8. The sum is correspondingly added by  
+// 1, 2, 4, 6, 8, 16, 64, 128 in turn. rawkeypressed interget prevents from adding 
+// constantly if user does not release pushed button.
 //***********************************************************************************
 int main()
 
@@ -154,7 +157,7 @@ DDRB = 0xF0;     //set port bits 4-7 B as output for 74HC138 decoder
 //PORTB = 0x00;    //reset at beginning
 uint8_t count;   // for returning the counting number when push the button
 uint16_t sum = 0;   //the value of sum
-int8_t rawkeypressed = 0;
+int8_t rawkeypressed = 0;   //prevent from adding constantly if user does not release pushed button
 
 while(1){
         //_delay_ms(3);    //4 digital display can light equally if don't use delay 3 ms
@@ -168,7 +171,7 @@ while(1){
 		//push the button
 		if (chk_buttons(i)) { 
 			//release the button, specially for S1
-			if (rawkeypressed == 1){   
+.			if (rawkeypressed == 1){   
 				rawkeypressed = 0;  //reset button
 				switch (i){ 
 					case 0: count = 1; break;     // S1 button is pushed 
